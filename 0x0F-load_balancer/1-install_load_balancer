@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-#Install HAproxy
-sudo apt-get update
-sudo apt-get install haproxy
 
-#Configure HAproxy
+# Install HAProxy
+sudo apt-get update
+sudo apt-get install -y haproxy
+
+# Configure HAProxy
+cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg >/dev/null
 global
     daemon
     maxconn 256
@@ -23,33 +25,41 @@ backend webservers
     balance roundrobin
     server 151938-web-01 54.237.56.192:80 check
     server 151938-web-02 54.146.65.87:80 check
+EOF
 
-#Enable and Start HAproxy Service
+# Enable and start HAProxy service
 sudo systemctl enable haproxy
 sudo systemctl start haproxy
 
-#Manage HAproxy via an init script
+# Manage HAProxy via an init script
+cat <<EOF | sudo tee /etc/systemd/system/haproxy.service >/dev/null
 [Unit]
-Description=HAproxy Load Balancer
+Description=HAProxy Load Balancer
 After=network.target
 
 [Service]
 ExecStart=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg
-ExecReload=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -sf $(cat /run/haproxy.pid)
+ExecReload=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -sf \$(cat /run/haproxy.pid)
 KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
+EOF
 
-#Enable and Start HAproxy
+# Reload systemd and start HAProxy
+sudo systemctl daemon-reload
 sudo systemctl enable haproxy
 sudo systemctl start haproxy
 
-#Test HAproxy
+# Test HAProxy
+cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg >/dev/null
 listen stats
     bind *:8080
     stats enable
     stats uri /haproxy-stats
     stats refresh 5s
+EOF
 
+# Reload HAProxy
+sudo systemctl reload haproxy
 
