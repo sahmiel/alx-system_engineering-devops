@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#Install HAproxy
+sudo apt-get update
+sudo apt-get install haproxy
+
+#Configure HAproxy
+global
+    daemon
+    maxconn 256
+
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+
+frontend http-in
+    bind *:80
+    default_backend webservers
+
+backend webservers
+    mode http
+    balance roundrobin
+    server 151938-web-01 54.237.56.192:80 check
+    server 151938-web-02 54.146.65.87:80 check
+
+#Enable and Start HAproxy Service
+sudo systemctl enable haproxy
+sudo systemctl start haproxy
+
+#Manage HAproxy via an init script
+[Unit]
+Description=HAproxy Load Balancer
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg
+ExecReload=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -sf $(cat /run/haproxy.pid)
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+
+#Enable and Start HAproxy
+sudo systemctl enable haproxy
+sudo systemctl start haproxy
+
+#Test HAproxy
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /haproxy-stats
+    stats refresh 5s
+
+
