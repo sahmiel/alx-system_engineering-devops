@@ -1,23 +1,55 @@
 #!/usr/bin/env bash
-# Installs and setup haproxy
 
-apt-get install -y software-properties-common
-add-apt-repository -y ppa:vbernat/haproxy-1.8
-apt-get -y update
-apt-get install -y haproxy=1.8.\*
+# Install HAProxy
+sudo apt-get update
+sudo apt-get install -y haproxy
 
-echo "ENABLED=1" > /etc/default/haproxy
+# Configure HAProxy
+cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg >/dev/null
+global
+    daemon
+    maxconn 256
 
-# Listen to web1 and web2 servers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-echo "
-   listen load_balancer
-   bind *:80
-   mode http
-   balance roundrobin
-   option httpclose
-   option forwardfor
-   server 151938-web-01 54.237.56.192:80 check
-   server 151938-web-02 54.146.65.87:80 check
-" >> /etc/haproxy/haproxy.cfg
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
 
-service haproxy start
+frontend http-in
+    bind *:80
+    default_backend webservers
+
+backend webservers
+    mode http
+    balance roundrobin
+    server 151938-web-01 54.237.56.192:80 check
+    server 151938-web-02 54.146.65.87:80 check
+
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /haproxy-stats
+    stats refresh 5s
+EOF
+
+# Create an HAProxy systemd service file
+cat <<EOF | sudo tee /etc/systemd/system/haproxy.service >/dev/null
+[Unit]
+Description=HAProxy Load Balancer
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg
+ExecReload=/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -sf \$(cat /run/haproxy.pid)
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd and start HAProxy
+sudo systemctl daemon-reload
+sudo systemctl enable haproxy
+sudo systemctl start haproxy
+
